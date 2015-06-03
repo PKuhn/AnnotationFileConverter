@@ -1,31 +1,48 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class FileParser {
     public static void main(String[] args) {
         FileParser parser = new FileParser();
-        parser.readInConfigurationFile();
+        List<String> configuration = parser.readInConfigurationFile();
+        System.out.println(parser.parseConfigurationFile(configuration));
     }
-    public void readInConfigurationFile() {
-        String filePath = "~/text_annotation_tools/brat-v1.3_Crunchy_Frog/data/testdata/annotation.conf";
-        File file = new File(filePath);
-        System.out.println(file.exists());
-        System.out.println(file.getName());
-        System.out.println(file.canRead());
-        System.out.println(file.getAbsolutePath());
-        file.setReadable(true);
+
+    public List<String> readInConfigurationFile() {
+        String fileName = "annotation.conf";
+        File file = new File(fileName);
+        List<String> lines = new ArrayList<>();
+
         try {
             Scanner fileScanner = new Scanner(file);
             while (fileScanner.hasNextLine()) {
                 String line = fileScanner.nextLine();
-                System.out.println(line);
+                lines.add(line);
             }
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-
+        return lines;
+    }
+    private List<String> parseConfigurationFile(List<String> configuration) {
+        List<String> entityLabels = new ArrayList<>();
+        for (String line : configuration) {
+            if (line.equals("[entities]") || line.equals("")){
+                continue;
+            }
+            else if (line.equals("[relations]")) {
+                //for now only read the entities
+                break;
+            }
+            else {
+                entityLabels.add(line);
+            }
+        }
+        return entityLabels;
     }
 }
