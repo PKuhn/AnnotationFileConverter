@@ -8,12 +8,29 @@ import java.util.Scanner;
 public class FileParser {
     public static void main(String[] args) {
         FileParser parser = new FileParser();
-        List<String> configuration = parser.readInConfigurationFile();
-        System.out.println(parser.parseConfigurationFile(configuration));
+        System.out.println(parser.parseConfigurationFile());
+        List<AnnotationEntity> entities = parser.readInAnnotationFile("");
+        for (AnnotationEntity entity : entities) {
+            System.out.println(entity.getContent());
+        }
     }
 
-    public List<String> readInConfigurationFile() {
-        String fileName = "annotation.conf";
+    public List<AnnotationEntity> readInAnnotationFile(String textName) {
+        textName = "antother_text";
+        String fileName = textName + ".ann";
+
+        List<String> annotations = readFileToLines(fileName);
+        List<AnnotationEntity> entities= new ArrayList<>();
+
+        for (String annotation : annotations) {
+            AnnotationEntity entity = new AnnotationEntity(annotation);
+            System.out.println(annotation);
+        }
+
+        return entities;
+    }
+
+    private List<String> readFileToLines(String fileName) {
         File file = new File(fileName);
         List<String> lines = new ArrayList<>();
 
@@ -29,7 +46,10 @@ public class FileParser {
         }
         return lines;
     }
-    private List<String> parseConfigurationFile(List<String> configuration) {
+
+
+    private List<String> parseConfigurationFile() {
+        List<String> configuration = readFileToLines("annotation.conf");
         List<String> entityLabels = new ArrayList<>();
         for (String line : configuration) {
             if (line.equals("[entities]") || line.equals("")){
