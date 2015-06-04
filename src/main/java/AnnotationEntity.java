@@ -7,12 +7,15 @@ public class AnnotationEntity {
 
     AnnotationEntity(String annotationLine) {
         annotationLine = annotationLine.trim().replaceAll(" +", " ");
-        String[] annotationParts = annotationLine.split(" ");
+        String[] annotationParts = annotationLine.split("\t");
         this.ID = annotationParts[0];
-        this.label = annotationParts[1];
-        this.startingPosition = Integer.parseInt(annotationParts[2]);
-        this.endPosition = Integer.parseInt(annotationParts[3]);
-        this.content = annotationParts[4];
+        this.content = annotationParts[2];
+
+        String[] annotationContent = annotationParts[1].split(" ");
+        this.label = annotationContent[1];
+        this.startingPosition = Integer.parseInt(annotationContent[1]);
+        this.endPosition = Integer.parseInt(annotationContent[2]);
+
     }
 
     public String getContent(){

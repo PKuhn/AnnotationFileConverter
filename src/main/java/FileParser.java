@@ -10,6 +10,7 @@ public class FileParser {
         FileParser parser = new FileParser();
         System.out.println(parser.parseConfigurationFile());
         List<AnnotationEntity> entities = parser.readInAnnotationFile("");
+
         for (AnnotationEntity entity : entities) {
             System.out.println(entity.getContent());
         }
@@ -24,7 +25,7 @@ public class FileParser {
 
         for (String annotation : annotations) {
             AnnotationEntity entity = new AnnotationEntity(annotation);
-            System.out.println(annotation);
+            entities.add(entity); 
         }
 
         return entities;
