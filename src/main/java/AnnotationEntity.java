@@ -12,7 +12,7 @@ public class AnnotationEntity {
         this.content = annotationParts[2];
 
         String[] annotationContent = annotationParts[1].split(" ");
-        this.label = annotationContent[1];
+        this.label = annotationContent[0];
         this.startingPosition = Integer.parseInt(annotationContent[1]);
         this.endPosition = Integer.parseInt(annotationContent[2]);
 
@@ -20,5 +20,13 @@ public class AnnotationEntity {
 
     public String getContent(){
         return content;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public int getStart() {
+        return startingPosition;
     }
 }
