@@ -21,7 +21,7 @@ public class FileParser {
             String text = parser.readInText("antother_text");
             List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
             List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
-            System.out.println(labels);
+            parser.writeAnnotationsToFile(tokens, labels);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -40,6 +40,19 @@ public class FileParser {
 
         return entities;
     }
+
+    private void writeAnnotationsToFile(List<String> tokens, List<String> labels) {
+        try {
+            PrintWriter writer = new PrintWriter("test.tsv", "UTF-8");
+            for (int i = 0; i < tokens.size(); i++) {
+                writer.println(tokens.get(i) + "\t" + labels.get(i));
+            }
+            writer.close();
+        } catch (FileNotFoundException | UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+    }
+
     private List<Integer> findStartingPositionsOfTokens(List<String> tokens, String text) {
         int tokenIndex = 0;
         int textIndex= 0;
