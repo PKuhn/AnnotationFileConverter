@@ -11,14 +11,29 @@ import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
 import edu.stanford.nlp.process.PTBTokenizer;
 
+import org.apache.commons.lang3.StringUtils;
+
 public class FileParser {
     public static void main(String[] args) {
         FileParser parser = new FileParser();
-        List<AnnotationEntity> entities = parser.readInAnnotationFile("antother_text");
+        List<String> fileNames = parser.getFileNames();
+        System.out.println(fileNames);
+        for (String fileName : fileNames) {
+            if (fileName.contains(".txt") && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") +".ann")) {
+                System.out.println("started creating tsv for: " + fileName);
+                createTSVFile(StringUtils.substringBefore(fileName, ".txt"));
+                System.out.println("created tsv for: " + fileName);
+            }
+        }
+    }
+
+    public static void createTSVFile(String textName) {
+        FileParser parser = new FileParser();
+        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName);
 
         try {
-            List<String> tokens = parser.tokenizeText("antother_text");
-            String text = parser.readInText("antother_text");
+            List<String> tokens = parser.tokenizeText(textName);
+            String text = parser.readInText(textName);
             List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
             List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
             parser.writeAnnotationsToFile(tokens, labels);
@@ -27,6 +42,16 @@ public class FileParser {
         }
     }
 
+    public List<String> getFileNames() {
+        File folder = new File("/home/patrick/text_annotation_tools/brat-v1.3_Crunchy_Frog/data/testdata");
+        File[] files = folder.listFiles();
+        List<String> fileNames = new ArrayList<>();
+
+        for (File file : files) {
+            fileNames.add(file.getName());
+        }
+        return fileNames;
+    }
     public List<AnnotationEntity> readInAnnotationFile(String textName) {
         String fileName = textName + ".ann";
 
@@ -41,11 +66,16 @@ public class FileParser {
         return entities;
     }
 
-    private void writeAnnotationsToFile(List<String> tokens, List<String> labels) {
+    private void writeAnnotationsToFile(List<String> tokens, List<String> labels, String fileName) {
         try {
-            PrintWriter writer = new PrintWriter("test.tsv", "UTF-8");
+            fileName += "tsv";
+            PrintWriter writer = new PrintWriter(fileName, "UTF-8");
             for (int i = 0; i < tokens.size(); i++) {
-                writer.println(tokens.get(i) + "\t" + labels.get(i));
+                if (labels.size() <= i) {
+                    writer.println(tokens.get(i) + "\t" + "O");
+                } else {
+                    writer.println(tokens.get(i) + "\t" + labels.get(i));
+                }
             }
             writer.close();
         } catch (FileNotFoundException | UnsupportedEncodingException e) {

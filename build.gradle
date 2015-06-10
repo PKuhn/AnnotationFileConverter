@@ -9,5 +9,6 @@ repositories {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11';
-    compile 'edu.stanford.nlp:stanford-corenlp:3.5.2'
+    compile 'edu.stanford.nlp:stanford-corenlp:3.5.2';
+    compile 'org.apache.commons:commons-lang3:3.0'
 }
