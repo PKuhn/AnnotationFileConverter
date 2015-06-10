@@ -15,35 +15,62 @@ import org.apache.commons.lang3.StringUtils;
 
 public class FileParser {
     public static void main(String[] args) {
+        String path = args[0];
+
         FileParser parser = new FileParser();
-        List<String> fileNames = parser.getFileNames();
-        System.out.println(fileNames);
+        List<String> fileNames = parser.getFileNames(path);
+
         for (String fileName : fileNames) {
             if (fileName.contains(".txt") && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") +".ann")) {
                 System.out.println("started creating tsv for: " + fileName);
-                createTSVFile(StringUtils.substringBefore(fileName, ".txt"));
+                createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
                 System.out.println("created tsv for: " + fileName);
             }
         }
+        mergeTSVFiles(path);
     }
 
-    public static void createTSVFile(String textName) {
+    public static void mergeTSVFiles(String path) {
         FileParser parser = new FileParser();
-        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName);
+        List<String> fileNames = parser.getFileNames(path);
+        String fileName = "merged";
+        try {
+            fileName += ".tsv";
+            PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
+            for ( String file : fileNames) {
+                if (file.contains(".tsv")) {
+                    List<String> lines = parser.readFileToLines(file, path);
+                    for(String line : lines) {
+                        writer.println(line);
+                    }
+                    writer.println();
+                }
+            }
+
+            writer.close();
+        } catch (FileNotFoundException | UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public static void createTSVFile(String textName, String path) {
+        FileParser parser = new FileParser();
+        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName, path);
 
         try {
-            List<String> tokens = parser.tokenizeText(textName);
-            String text = parser.readInText(textName);
+            List<String> tokens = parser.tokenizeText(textName, path);
+            String text = parser.readInText(textName, path);
             List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
             List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
-            parser.writeAnnotationsToFile(tokens, labels);
+            parser.writeAnnotationsToFile(tokens, labels, textName, path);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public List<String> getFileNames() {
-        File folder = new File("/home/patrick/text_annotation_tools/brat-v1.3_Crunchy_Frog/data/testdata");
+    public List<String> getFileNames(String path) {
+        File folder = new File(path);
         File[] files = folder.listFiles();
         List<String> fileNames = new ArrayList<>();
 
@@ -52,10 +79,10 @@ public class FileParser {
         }
         return fileNames;
     }
-    public List<AnnotationEntity> readInAnnotationFile(String textName) {
+    public List<AnnotationEntity> readInAnnotationFile(String textName, String path) {
         String fileName = textName + ".ann";
 
-        List<String> annotations = readFileToLines(fileName);
+        List<String> annotations = readFileToLines(fileName, path);
         List<AnnotationEntity> entities= new ArrayList<>();
 
         for (String annotation : annotations) {
@@ -66,10 +93,10 @@ public class FileParser {
         return entities;
     }
 
-    private void writeAnnotationsToFile(List<String> tokens, List<String> labels, String fileName) {
+    private void writeAnnotationsToFile(List<String> tokens, List<String> labels, String fileName, String path) {
         try {
-            fileName += "tsv";
-            PrintWriter writer = new PrintWriter(fileName, "UTF-8");
+            fileName += ".tsv";
+            PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
             for (int i = 0; i < tokens.size(); i++) {
                 if (labels.size() <= i) {
                     writer.println(tokens.get(i) + "\t" + "O");
@@ -114,11 +141,11 @@ public class FileParser {
         return startPositions;
     }
 
-    private String readInText(String textName) {
-        String fileName = textName += ".txt";
+    private String readInText(String textName, String path) {
+        String fileName = textName + ".txt";
         String text = "";
         try {
-            List<String> lines = Files.readAllLines(Paths.get(fileName));
+            List<String> lines = Files.readAllLines(Paths.get(path + File.separator +fileName));
             text = String.join(" ", lines);
         } catch (IOException e) {
             e.printStackTrace();
@@ -126,12 +153,12 @@ public class FileParser {
         return text;
     }
 
-    private List<String> tokenizeText(String textName) throws IOException {
-        String fileName = textName += ".txt";
+    private List<String> tokenizeText(String textName, String path) throws IOException {
+        String fileName = textName + ".txt";
 
         List<String> tokens = new ArrayList<>();
 
-        PTBTokenizer<CoreLabel> ptbt = new PTBTokenizer<>(new FileReader(fileName),
+        PTBTokenizer<CoreLabel> ptbt = new PTBTokenizer<>(new FileReader(path+ File.separator +fileName),
                 new CoreLabelTokenFactory(), "");
         while (ptbt.hasNext()) {
             CoreLabel label = ptbt.next();
@@ -163,17 +190,18 @@ public class FileParser {
         }
         return labels;
     }
-    private List<String> readFileToLines(String fileName) {
-        File file = new File(fileName);
+    private List<String> readFileToLines(String fileName, String path) {
+        File file = new File(path + File.separator + fileName);
         List<String> lines = new ArrayList<>();
 
+
+        Scanner fileScanner = null;
         try {
-            Scanner fileScanner = new Scanner(file);
+            fileScanner = new Scanner(file);
             while (fileScanner.hasNextLine()) {
                 String line = fileScanner.nextLine();
                 lines.add(line);
             }
-
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
@@ -181,8 +209,8 @@ public class FileParser {
     }
 
 
-    private List<String> parseConfigurationFile() {
-        List<String> configuration = readFileToLines("annotation.conf");
+    private List<String> parseConfigurationFile(String path) {
+        List<String> configuration = readFileToLines("annotation.conf", path);
         List<String> entityLabels = new ArrayList<>();
         for (String line : configuration) {
             if (line.equals("[entities]") || line.equals("")){
