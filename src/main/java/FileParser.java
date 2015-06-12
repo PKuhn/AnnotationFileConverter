@@ -3,9 +3,8 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
@@ -16,18 +15,39 @@ import org.apache.commons.lang3.StringUtils;
 public class FileParser {
     public static void main(String[] args) {
         String path = args[0];
-
-        FileParser parser = new FileParser();
+        convertFileFromSlashTagToAnn(path);
+        /*FileParser parser = new FileParser();
         List<String> fileNames = parser.getFileNames(path);
 
-        for (String fileName : fileNames) {
-            if (fileName.contains(".txt") && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") +".ann")) {
-                System.out.println("started creating tsv for: " + fileName);
-                createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
-                System.out.println("created tsv for: " + fileName);
-            }
-        }
+        fileNames.stream().filter(fileName -> fileName.contains(".txt")
+                && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
+            System.out.println("started creating tsv for: " + fileName);
+            createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
+            System.out.println("created tsv for: " + fileName);
+        });
         mergeTSVFiles(path);
+        */
+    }
+    public static void convertFileFromSlashTagToAnn(String filePath) {
+        List<String> lines = readFileToLines("SlashTags.txt",filePath);
+        List<String> annotations = lines.stream()
+                                        .map(FileParser::convertLineToAnn)
+                                        .flatMap(Collection::stream)
+                                        .collect(Collectors.toList());
+        System.out.println(annotations);
+    }
+
+    public static List<String> convertLineToAnn(String line) {
+        List<String> taggedLines = new ArrayList<>();
+        List<String> annotations = Arrays.asList(line.split(" "));
+
+        annotations.stream().forEach((annotation) -> {
+            String[] annotationParts = annotation.split("/");
+            String annotationInAnnFormat = annotationParts[0] +"\t" + annotationParts[1];
+            taggedLines.add(annotationInAnnFormat);
+        });
+
+        return taggedLines;
     }
 
     public static void mergeTSVFiles(String path) {
@@ -37,15 +57,11 @@ public class FileParser {
         try {
             fileName += ".tsv";
             PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
-            for ( String file : fileNames) {
-                if (file.contains(".tsv")) {
-                    List<String> lines = parser.readFileToLines(file, path);
-                    for(String line : lines) {
-                        writer.println(line);
-                    }
-                    writer.println();
-                }
-            }
+            fileNames.stream().filter(file -> file.contains(".tsv")).forEach(file -> {
+                List<String> lines = readFileToLines(file, path);
+                lines.forEach(writer::println);
+                writer.println();
+            });
 
             writer.close();
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
@@ -190,7 +206,7 @@ public class FileParser {
         }
         return labels;
     }
-    private List<String> readFileToLines(String fileName, String path) {
+    private static List<String> readFileToLines(String fileName, String path) {
         File file = new File(path + File.separator + fileName);
         List<String> lines = new ArrayList<>();
 
