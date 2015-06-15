@@ -5,6 +5,14 @@ public class AnnotationEntity {
     private int endPosition;
     private String content;
 
+    AnnotationEntity(String ID, String content, int startPos, int endPos, String label){
+        this.ID = ID;
+        this.content = content;
+        this.label = label;
+        this.startingPosition = startPos;
+        this.endPosition = endPos;
+    };
+
     AnnotationEntity(String annotationLine) {
         annotationLine = annotationLine.trim().replaceAll(" +", " ");
         String[] annotationParts = annotationLine.split("\t");

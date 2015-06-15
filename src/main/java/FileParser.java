@@ -15,8 +15,8 @@ import org.apache.commons.lang3.StringUtils;
 public class FileParser {
     public static void main(String[] args) {
         String path = args[0];
-        convertFileFromSlashTagToAnn(path);
-        /*FileParser parser = new FileParser();
+        //convertFileFromSlashTagToAnn(path);
+        FileParser parser = new FileParser();
         List<String> fileNames = parser.getFileNames(path);
 
         fileNames.stream().filter(fileName -> fileName.contains(".txt")
@@ -26,7 +26,7 @@ public class FileParser {
             System.out.println("created tsv for: " + fileName);
         });
         mergeTSVFiles(path);
-        */
+
     }
     public static void convertFileFromSlashTagToAnn(String filePath) {
         List<String> lines = readFileToLines("SlashTags.txt",filePath);
@@ -43,7 +43,7 @@ public class FileParser {
 
         annotations.stream().forEach((annotation) -> {
             String[] annotationParts = annotation.split("/");
-            String annotationInAnnFormat = annotationParts[0] +"\t" + annotationParts[1];
+            String annotationInAnnFormat = annotationParts[0] + "\t" + annotationParts[1];
             taggedLines.add(annotationInAnnFormat);
         });
 
@@ -101,11 +101,42 @@ public class FileParser {
         List<String> annotations = readFileToLines(fileName, path);
         List<AnnotationEntity> entities= new ArrayList<>();
 
+        int id = 0;
         for (String annotation : annotations) {
-            AnnotationEntity entity = new AnnotationEntity(annotation);
-            entities.add(entity);
+            //AnnotationEntity entity = new AnnotationEntity(annotation);
+            //entities.add(entity);
+            List<AnnotationEntity> entitiesInLine =  parseAnnotationLine(annotation, id);
+            entities.addAll(entitiesInLine);
+            id += entitiesInLine.size();
         }
 
+        return entities;
+    }
+
+    private List<AnnotationEntity> parseAnnotationLine(String line, int currentIDCounter) {
+        List<AnnotationEntity> entities = new ArrayList<>();
+
+        line = line.trim().replaceAll(" +", " ");
+        String[] annotationParts = line.split("\t");
+
+        String content = annotationParts[2];
+        List<String> contentParts = Arrays.asList(content.split(" "));
+
+        String[] annotationContent = annotationParts[1].split(" ");
+        String label = annotationContent[0];
+        int startPosition = Integer.parseInt(annotationContent[1]);
+        int endPosition = Integer.parseInt(annotationContent[2]);
+
+
+        for (int i = 0; i < contentParts.size(); i++) {
+            String ID = "T" + currentIDCounter ;
+            String currentContent = contentParts.get(i);
+            int startPositionOfPart = startPosition + content.indexOf(currentContent);
+            int endPositionOfPart = startPositionOfPart + currentContent.length();
+            AnnotationEntity entity = new AnnotationEntity(ID, currentContent, startPositionOfPart,
+                    endPositionOfPart, label);
+            entities.add(entity);
+        }
         return entities;
     }
 
@@ -129,9 +160,14 @@ public class FileParser {
     private List<Integer> findStartingPositionsOfTokens(List<String> tokens, String text) {
         int tokenIndex = 0;
         int textIndex= 0;
+        for (int i = 0; i < tokens.size(); i++) {
+            if (tokens.get(i).equals("''") || tokens.get(i).equals("``")) {
+                tokens.set(i, "\"");
+            }
+        }
         List<Integer> startPositions = new ArrayList<Integer>();
 
-        while (tokenIndex < tokens.size() && textIndex <= text.length()) {
+        while (tokenIndex < tokens.size() && textIndex < text.length()) {
 
             String nextToken = tokens.get(tokenIndex);
             int tokenSize = nextToken.length();
@@ -203,6 +239,7 @@ public class FileParser {
                 token = tokens.get(tokenIndex);
             }
             labels.add(annotation.getLabel());
+            tokenIndex++;
         }
         return labels;
     }
