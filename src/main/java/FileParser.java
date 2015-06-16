@@ -1,7 +1,5 @@
 import java.io.*;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -10,24 +8,12 @@ import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
 import edu.stanford.nlp.process.PTBTokenizer;
 
-import org.apache.commons.lang3.StringUtils;
-
 public class FileParser {
-    public static void main(String[] args) {
-        String path = args[0];
-        //convertFileFromSlashTagToAnn(path);
-        FileParser parser = new FileParser();
-        List<String> fileNames = parser.getFileNames(path);
-
-        fileNames.stream().filter(fileName -> fileName.contains(".txt")
-                && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
-            System.out.println("started creating tsv for: " + fileName);
-            createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
-            System.out.println("created tsv for: " + fileName);
-        });
-        mergeTSVFiles(path);
-
-    }
+    /**
+     * Converts all txt files in a given directory from the default output of Standford NER parser to
+     * .ann format and saves it as .ann files.
+     * @param filePath the directory of the text files which should be converted
+     */
     public static void convertFileFromSlashTagToAnn(String filePath) {
         List<String> lines = readFileToLines("SlashTags.txt",filePath);
         List<String> annotations = lines.stream()
@@ -37,7 +23,12 @@ public class FileParser {
         System.out.println(annotations);
     }
 
-    public static List<String> convertLineToAnn(String line) {
+    /**
+     * Converts one line of Standford NER output format to the according lines in .ann format
+     * @param line line in Standford NER format
+     * @return List of lines which can be added to an .ann FIle
+     */
+    private static List<String> convertLineToAnn(String line) {
         List<String> taggedLines = new ArrayList<>();
         List<String> annotations = Arrays.asList(line.split(" "));
 
@@ -50,6 +41,11 @@ public class FileParser {
         return taggedLines;
     }
 
+    /**
+     * Merges together all TSV files files in a given directory, produced from single .ann .txt file pairs.
+     * These files are separated with a free line according to Standford NER input format
+     * @param path path of directory
+     */
     public static void mergeTSVFiles(String path) {
         FileParser parser = new FileParser();
         List<String> fileNames = parser.getFileNames(path);
@@ -67,25 +63,28 @@ public class FileParser {
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             e.printStackTrace();
         }
-
     }
 
+    /**
+     * Creates TSV File for a single text. Requires according .ann File to be present.
+     * @param textName name of text wanted to convert to TSV format
+     * @param path path to directory where .txt and .ann file are
+     */
     public static void createTSVFile(String textName, String path) {
         FileParser parser = new FileParser();
         List<AnnotationEntity> entities = parser.readInAnnotationFile(textName, path);
-
         try {
             List<String> tokens = parser.tokenizeText(textName, path);
             String text = parser.readInText(textName, path);
             List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
             List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
-            parser.writeAnnotationsToFile(tokens, labels, textName, path);
+            parser.writeAnnotationsToTSV(tokens, labels, textName, path);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public List<String> getFileNames(String path) {
+    private List<String> getFileNames(String path) {
         File folder = new File(path);
         File[] files = folder.listFiles();
         List<String> fileNames = new ArrayList<>();
@@ -95,7 +94,14 @@ public class FileParser {
         }
         return fileNames;
     }
-    public List<AnnotationEntity> readInAnnotationFile(String textName, String path) {
+
+    /**
+     * Reads annotation file for a text and generates AnnotationEntities for that file.
+     * @param textName name of the text for which the .ann file should be parsed
+     * @param path path to directory where name.txt and name.ann are present in this directory
+     * @return List of entities in own AnnotationEntity format
+     */
+    private List<AnnotationEntity> readInAnnotationFile(String textName, String path) {
         String fileName = textName + ".ann";
 
         List<String> annotations = readFileToLines(fileName, path);
@@ -103,16 +109,20 @@ public class FileParser {
 
         int id = 0;
         for (String annotation : annotations) {
-            //AnnotationEntity entity = new AnnotationEntity(annotation);
-            //entities.add(entity);
             List<AnnotationEntity> entitiesInLine =  parseAnnotationLine(annotation, id);
             entities.addAll(entitiesInLine);
             id += entitiesInLine.size();
         }
-
         return entities;
     }
 
+    /**
+     * Parses one line in the .ann File into a List of AnnotationEntity. This is needed because it is possible to have
+     * annotations that contain multiple Elements.
+     * @param line Line in .ann file to be parsed. This line is in format ID \t Label StartPosition EndPosition \t Content
+     * @param currentIDCounter current annotation ID needed fro create new Annotation
+     * @return List of Annotation Entities which then have only one word as content.
+     */
     private List<AnnotationEntity> parseAnnotationLine(String line, int currentIDCounter) {
         List<AnnotationEntity> entities = new ArrayList<>();
 
@@ -120,27 +130,29 @@ public class FileParser {
         String[] annotationParts = line.split("\t");
 
         String content = annotationParts[2];
+        // split content into multiple words if needed
         List<String> contentParts = Arrays.asList(content.split(" "));
 
-        String[] annotationContent = annotationParts[1].split(" ");
-        String label = annotationContent[0];
-        int startPosition = Integer.parseInt(annotationContent[1]);
-        int endPosition = Integer.parseInt(annotationContent[2]);
+        // annotation Information contains [Label StartPosition EndPosition]
+        String[] annotationInformation = annotationParts[1].split(" ");
+        String label = annotationInformation[0];
+        int startPosition = Integer.parseInt(annotationInformation[1]);
 
-
-        for (int i = 0; i < contentParts.size(); i++) {
-            String ID = "T" + currentIDCounter ;
-            String currentContent = contentParts.get(i);
-            int startPositionOfPart = startPosition + content.indexOf(currentContent);
-            int endPositionOfPart = startPositionOfPart + currentContent.length();
-            AnnotationEntity entity = new AnnotationEntity(ID, currentContent, startPositionOfPart,
+        // build annotation for each word
+        for (String annotatedWord : contentParts) {
+            String ID = "T" + currentIDCounter;
+            int startPositionOfPart = startPosition + content.indexOf(annotatedWord);
+            int endPositionOfPart = startPositionOfPart + annotatedWord.length();
+            AnnotationEntity entity = new AnnotationEntity(ID, annotatedWord, startPositionOfPart,
                     endPositionOfPart, label);
             entities.add(entity);
         }
+
         return entities;
     }
 
-    private void writeAnnotationsToFile(List<String> tokens, List<String> labels, String fileName, String path) {
+
+    private void writeAnnotationsToTSV(List<String> tokens, List<String> labels, String fileName, String path) {
         try {
             fileName += ".tsv";
             PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
@@ -157,6 +169,13 @@ public class FileParser {
         }
     }
 
+    /**
+     * Match the positions of the Standford Tokenizer to the positions in the text to compare
+     * them with the positions in the .ann files later on.
+     * @param tokens List of token Output generated by Standford tokenizer
+     * @param text text for which the tokens where generated
+     * @return returns the starting position of the tokens as list of Integer
+     */
     private List<Integer> findStartingPositionsOfTokens(List<String> tokens, String text) {
         int tokenIndex = 0;
         int textIndex= 0;
@@ -186,9 +205,7 @@ public class FileParser {
             tokenIndex++;
         }
 
-        if (startPositions.size() != tokens.size()) {
-            throw new RuntimeException();
-        }
+        assert (startPositions.size() == tokens.size());
 
         return startPositions;
     }
@@ -205,6 +222,7 @@ public class FileParser {
         return text;
     }
 
+
     private List<String> tokenizeText(String textName, String path) throws IOException {
         String fileName = textName + ".txt";
 
@@ -220,10 +238,16 @@ public class FileParser {
         return tokens;
     }
 
+    /**
+     * Converts each word of the tokenized text into the representation of the TSV file
+     * (word \t label)
+     * @param tokens text to convert in token representation
+     * @param annotations annotations parsed from according .ann file
+     * @param startPositions starting positions of tokens in text
+     * @return list of labels in TSV format
+     */
     private List<String> matchTokens(List<String> tokens, List<AnnotationEntity> annotations, List<Integer> startPositions) {
-        if (tokens.size() != startPositions.size()) {
-            throw new RuntimeException();
-        }
+        assert(tokens.size() == startPositions.size());
 
         List<String> labels = new ArrayList<>();
         int tokenIndex = 0;
@@ -243,6 +267,7 @@ public class FileParser {
         }
         return labels;
     }
+
     private static List<String> readFileToLines(String fileName, String path) {
         File file = new File(path + File.separator + fileName);
         List<String> lines = new ArrayList<>();
