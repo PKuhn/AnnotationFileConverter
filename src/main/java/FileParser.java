@@ -7,38 +7,25 @@ import java.util.stream.Collectors;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
 import edu.stanford.nlp.process.PTBTokenizer;
+import org.apache.commons.lang3.StringUtils;
 
 public class FileParser {
-    /**
-     * Converts all txt files in a given directory from the default output of Standford NER parser to
-     * .ann format and saves it as .ann files.
-     * @param filePath the directory of the text files which should be converted
-     */
-    public static void convertFileFromSlashTagToAnn(String filePath) {
-        List<String> lines = readFileToLines("SlashTags.txt",filePath);
-        List<String> annotations = lines.stream()
-                                        .map(FileParser::convertLineToAnn)
-                                        .flatMap(Collection::stream)
-                                        .collect(Collectors.toList());
-        System.out.println(annotations);
-    }
 
     /**
-     * Converts one line of Standford NER output format to the according lines in .ann format
-     * @param line line in Standford NER format
-     * @return List of lines which can be added to an .ann FIle
+     * Scans directory for all txt files where an according .ann file is present and converts them in
+     * a single TSV file named merged.tsv
+     * @param path path of directory where txt and ann files should be searched
      */
-    private static List<String> convertLineToAnn(String line) {
-        List<String> taggedLines = new ArrayList<>();
-        List<String> annotations = Arrays.asList(line.split(" "));
+    public void parseAnnotationFilesInDirectory(String path) {
+        List<String> fileNames = getFileNames(path);
 
-        annotations.stream().forEach((annotation) -> {
-            String[] annotationParts = annotation.split("/");
-            String annotationInAnnFormat = annotationParts[0] + "\t" + annotationParts[1];
-            taggedLines.add(annotationInAnnFormat);
+        fileNames.stream().filter(fileName -> fileName.contains(".txt")
+                && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
+            System.out.println("started creating tsv for: " + fileName);
+            createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
+            System.out.println("created tsv for: " + fileName);
         });
-
-        return taggedLines;
+        mergeTSVFiles(path);
     }
 
     /**
