@@ -51,6 +51,38 @@ public class FileParser {
             e.printStackTrace();
         }
     }
+    /**
+     * Converts all txt files in a given directory from the default output of Standford NER parser to
+     * .ann format and saves it as .ann files.
+     * @param filePath the directory of the text files which should be converted
+     */
+    public static void convertFileFromSlashTagToAnn(String filePath) {
+        List<String> lines = readFileToLines("SlashTags.txt",filePath);
+        List<String> annotations = lines.stream()
+                .map(FileParser::convertLineToAnn)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+        System.out.println(annotations);
+    }
+
+    /**
+     * Converts one line of Standford NER output format to the according lines in .ann format
+     * @param line line in Standford NER format
+     * @return List of lines which can be added to an .ann FIle
+     */
+    private static List<String> convertLineToAnn(String line) {
+        List<String> taggedLines = new ArrayList<>();
+        List<String> annotations = Arrays.asList(line.split(" "));
+
+        annotations.stream().forEach((annotation) -> {
+            String[] annotationParts = annotation.split("/");
+            String annotationInAnnFormat = annotationParts[0] + "\t" + annotationParts[1];
+            taggedLines.add(annotationInAnnFormat);
+        });
+
+        return taggedLines;
+    }
+
 
     /**
      * Creates TSV File for a single text. Requires according .ann File to be present.
