@@ -5,6 +5,16 @@ public class AnnotationEntity {
     private int endPosition;
     private String content;
 
+/**
+     * constructor that takes all relevant information for an annotation entity
+     * @param ID of the annotation
+     * @param content of the annotation
+     * @param startPos of the annotation
+     * @param endPos of the annotation
+     * @param label of the annotation
+     * @return AnnotationEnity with all properties set
+     */
+
     AnnotationEntity(String ID, String content, int startPos, int endPos, String label){
         this.ID = ID;
         this.content = content;
@@ -13,19 +23,7 @@ public class AnnotationEntity {
         this.endPosition = endPos;
     };
 
-    AnnotationEntity(String annotationLine) {
-        annotationLine = annotationLine.trim().replaceAll(" +", " ");
-        String[] annotationParts = annotationLine.split("\t");
-        this.ID = annotationParts[0];
-        this.content = annotationParts[2];
-
-        String[] annotationContent = annotationParts[1].split(" ");
-        this.label = annotationContent[0];
-        this.startingPosition = Integer.parseInt(annotationContent[1]);
-        this.endPosition = Integer.parseInt(annotationContent[2]);
-
-    }
-
+    
     public String getContent(){
         return content;
     }
