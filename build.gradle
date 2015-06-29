@@ -1,7 +1,28 @@
 apply plugin: 'java'
+apply plugin: 'maven-publish'
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.1'
+    }
+}
+apply plugin: 'com.github.johnrengelman.shadow'
+
 
 sourceCompatibility = 1.8
 version = '1.0'
+
+task sourceJar(type: Jar) {
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
 
 repositories {
     mavenCentral()
@@ -12,3 +33,33 @@ dependencies {
     compile 'edu.stanford.nlp:stanford-corenlp:3.5.2';
     compile 'org.apache.commons:commons-lang3:3.0'
 }
+
+publishing {
+    repositories {
+        maven {
+            credentials {
+                username publishuser
+                password publishpass
+            }
+            url "http://labs.3fact.com:8081/nexus/content/repositories/snapshots"
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            groupId 'com.threefact'
+            artifactId 'annotationFileConverter'
+            version '1.0-SNAPSHOT'
+
+            artifact sourceJar {
+                classifier "sources"
+            }
+
+            artifact javadocJar {
+                classifier "javadoc"
+            }
+
+            from components.java
+        }
+    }
+}
+
