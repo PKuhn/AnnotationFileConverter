@@ -15,8 +15,11 @@ public class FileParser {
 
     public static void main(String[] args) {
         String path = args[0];
+        String outputPath = args[1];
         FileParser parser = new FileParser();
-        parser.parseAnnotationFilesInDirectory(path);
+        List<String> allowedLabels = new ArrayList<>();
+        allowedLabels.add("COMP");
+        parser.parseAnnotationFilesInDirectory(path, outputPath, "merged",allowedLabels);
     }
 
     /**
@@ -24,19 +27,39 @@ public class FileParser {
      * a single TSV file named merged.tsv
      * @param path path of directory where txt and ann files should be searched
      */
-    public void parseAnnotationFilesInDirectory(String path) {
+    public void parseAnnotationFilesInDirectory(String path, String outputPath, String outputFileName) {
         List<String> fileNames = getFileNames(path);
 
         fileNames.stream().filter(fileName -> fileName.contains(".txt")
                 && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
             System.out.println("started creating tsv for: " + fileName);
-            if (fileName.equals("54c67174e4b07c258dc7e9be.txt")) {
-                System.out.println("");
+            try {
+                createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
+            } catch (StringIndexOutOfBoundsException e){
+                System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
+            } catch (IndexOutOfBoundsException e) {
+                System.out.println("There was an error with text: " + fileName + " while matching the tokens");
             }
-            createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
             System.out.println("created tsv for: " + fileName);
         });
-        mergeTSVFiles(path);
+        mergeTSVFiles(path, outputPath, outputFileName);
+    }
+    public void parseAnnotationFilesInDirectory(String path, String outputPath, String outputFileName, List<String> allowedLabels) {
+        List<String> fileNames = getFileNames(path);
+
+        fileNames.stream().filter(fileName -> fileName.contains(".txt")
+                && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
+            System.out.println("started creating tsv for: " + fileName);
+            try {
+                createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path, allowedLabels);
+            } catch (StringIndexOutOfBoundsException e){
+                System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
+            } catch (IndexOutOfBoundsException e) {
+                System.out.println("There was an error with text: " + fileName + " while matching the tokens");
+            }
+            System.out.println("created tsv for: " + fileName);
+        });
+        mergeTSVFiles(path, outputPath, outputFileName);
     }
 
     /**
@@ -44,13 +67,12 @@ public class FileParser {
      * These files are separated with a free line according to Standford NER input format
      * @param path path of directory
      */
-    public static void mergeTSVFiles(String path) {
+    public static void mergeTSVFiles(String path, String outputPath, String fileName) {
         FileParser parser = new FileParser();
         List<String> fileNames = parser.getFileNames(path);
-        String fileName = "merged";
         try {
             fileName += ".tsv";
-            PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
+            PrintWriter writer = new PrintWriter(outputPath + File.separator + fileName, "UTF-8");
             fileNames.stream().filter(file -> file.contains(".tsv")).forEach(file -> {
                 List<String> lines = readFileToLines(file, path);
                 lines.forEach(writer::println);
@@ -81,6 +103,34 @@ public class FileParser {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+    public void createTSVFile(String textName, String path, List<String> allowedLabels) {
+        FileParser parser = new FileParser();
+        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName, path);
+        try {
+            List<String> tokens = parser.tokenizeText(textName, path);
+            String text = parser.readInText(textName, path);
+            tokens = preprocessTokens(tokens);
+            List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
+            List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
+            labels = replaceUnallowedLabels(labels, allowedLabels);
+            parser.writeAnnotationsToTSV(tokens, labels, textName, path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private List<String> replaceUnallowedLabels(List<String> labels, List<String> allowedLabels) {
+        List<String> cleanedLabels = new ArrayList<>();
+        for (String label : labels) {
+            if (allowedLabels.contains(label)) {
+                cleanedLabels.add(label);
+            } else {
+                cleanedLabels.add("O");
+            }
+        }
+
+        return cleanedLabels;       
     }
 
     /**
@@ -145,22 +195,30 @@ public class FileParser {
         String[] annotationParts = line.split("\t");
 
         String content = annotationParts[2];
+        if (content.equals("'")) {
+            return new ArrayList<>();
+        }
         // split content into multiple words if needed
         List<String> contentParts = Arrays.asList(content.split(" ")).stream()
                 .map(this::splitTokenByDash).flatMap(Collection::stream)
                 .collect(Collectors.toList());
 
         List<String> contentPartsWithSameSingleQuote =
-                    contentParts.stream().map(part -> part.replace("’","'"))
+                    contentParts.stream().map(part -> part.replace("’", "'"))
                             .collect(Collectors.toList());
+
+        List<String> splittedCommata =
+                contentPartsWithSameSingleQuote.stream().map(this::splitTokenByComma)
+                .flatMap(Collection::stream).collect(Collectors.toList());
 
         // annotation Information contains [Label StartPosition EndPosition]
         String[] annotationInformation = annotationParts[1].split(" ");
         String label = annotationInformation[0];
         int startPosition = Integer.parseInt(annotationInformation[1]);
 
+        content = content.replace("’","'");
         // build annotation for each word
-        for (String annotatedWord : contentParts) {
+        for (String annotatedWord : splittedCommata) {
             String ID = "T" + currentIDCounter;
             int startPositionOfPart = startPosition + content.indexOf(annotatedWord);
             int endPositionOfPart = startPositionOfPart + annotatedWord.length();
@@ -182,6 +240,7 @@ public class FileParser {
     private void writeAnnotationsToTSV(List<String> tokens, List<String> labels, String fileName, String path) {
         try {
             fileName += ".tsv";
+            tokens = postProcessTokens(tokens);
             PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
             for (int i = 0; i < tokens.size(); i++) {
                 if (labels.size() <= i) {
@@ -209,6 +268,7 @@ public class FileParser {
 
         List<Integer> startPositions = new ArrayList<Integer>();
         text = text.replace("’","'");
+        text = text.replace("‘","'");
 
         while (tokenIndex < tokens.size()) {
 
@@ -217,11 +277,7 @@ public class FileParser {
 
             String nextTextToken = text.substring(textIndex, textIndex + tokenSize);
 
-            //System.out.println((nextToken));
-
-            if(nextToken.equals("d’Avoine")) {
-                System.out.println("aha");
-            }
+           // System.out.println(" found " + nextTextToken + " expected " + nextToken);
 
             if (nextToken.equals("“") && nextTextToken.equals("\"")) {
                 ;
@@ -274,6 +330,7 @@ public class FileParser {
                     break;
                 case("’’"):  processedTokens.add("“");
                     break;
+                case ("`"): processedTokens.add("'"); break;
                 case("-LRB-") : processedTokens.add("("); break;
                 case("-RRB-") : processedTokens.add(")"); break;
                 case("--"): processedTokens.add(" "); break;
@@ -305,6 +362,21 @@ public class FileParser {
         return tokensWithSameSingleQuotes;
     }
 
+    private List<String> postProcessTokens(List<String> tokens) {
+        List<String> processedTokens = new ArrayList<>();
+        for (String token : tokens) {
+            switch(token)  {
+                case ("“"): processedTokens.add("''"); break;
+                case ("`"): processedTokens.add("'"); break;
+                case("(") : processedTokens.add("-LRB-"); break;
+                case(")") : processedTokens.add("-RRB-"); break;
+                case("--"): processedTokens.add(" "); break;
+                default: processedTokens.add(token);
+            }
+        }
+        return processedTokens;
+    }
+
     /**
      * Method use the generate tokens which have to be labeled to train the Standford NER. This is needed to  
      * partition the text into chunks like expexted from the CRF-Classifier
@@ -327,12 +399,32 @@ public class FileParser {
         return tokens;
     }
 
+    List<String> splitTokenByDelimiterWithoutDeletion(String input, String delimiter) {
+        if (input.contains(delimiter)) {
+            List<String> splittedString = new ArrayList<>(Arrays.asList(input.split("-")));
+
+            for (int i = 1; i < splittedString.size(); i += 2) {
+                // i has to be increased by two because elements are added
+                splittedString.add(i, delimiter);
+            }
+            if (splittedString.size() != 0) {
+                return splittedString;
+            }
+        }
+        List<String> result = new ArrayList<>();
+        result.add(input);
+        return result;
+    }
+    List<String> splitTokenByComma(String input) {
+        return splitTokenByDelimiterWithoutDeletion(input, ",");
+    }
+
     List<String> splitTokenByDash(String input) {
         if (input.contains("-")) {
             List<String> splittedString = new ArrayList<>(Arrays.asList(input.split("-")));
 
             for (int i = 1; i < splittedString.size(); i += 2) {
-                // i has to be increased by two because elemens are added
+                // i has to be increased by two because elements are added
                 splittedString.add(i, "-");
             }
             if (splittedString.size() != 0) {
@@ -361,14 +453,16 @@ public class FileParser {
         for (AnnotationEntity annotation : annotations) {
             String token = tokens.get(tokenIndex);
             int textPosition = startPositions.get(tokenIndex);
-
+            if (annotation.getContent().contains(",")) {
+                continue;
+            }
             while (!(token.contains(annotation.getContent()) && textPosition == annotation.getStart())) {
                 tokenIndex++;
                 labels.add("O");
                 textPosition = startPositions.get(tokenIndex);
                 token = tokens.get(tokenIndex);
-
             }
+
             labels.add(annotation.getLabel());
             tokenIndex++;
         }
