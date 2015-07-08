@@ -1,4 +1,5 @@
 apply plugin: 'java'
+apply plugin: 'application'
 apply plugin: 'maven-publish'
 
 buildscript {
@@ -14,6 +15,7 @@ apply plugin: 'com.github.johnrengelman.shadow'
 
 sourceCompatibility = 1.8
 version = '1.0'
+mainClassName = "FileParser"
 
 task sourceJar(type: Jar) {
     from sourceSets.main.allJava
@@ -48,7 +50,7 @@ publishing {
         mavenJava(MavenPublication) {
             groupId 'com.threefact'
             artifactId 'annotationFileConverter'
-            version '1.0-SNAPSHOT'
+            version '1.1-SNAPSHOT'
 
             artifact sourceJar {
                 classifier "sources"

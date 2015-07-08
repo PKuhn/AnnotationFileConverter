@@ -33,6 +33,7 @@
 .textmate
 /incoming-distributions
 .idea
+gradle.properties
 *.sublime-*
 .nb-gradle
 .java-version
