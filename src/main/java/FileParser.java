@@ -33,31 +33,36 @@ public class FileParser {
         fileNames.stream().filter(fileName -> fileName.contains(".txt")
                 && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
             System.out.println("started creating tsv for: " + fileName);
+
             try {
                 createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
-            } catch (StringIndexOutOfBoundsException e){
+                System.out.println("created tsv for: " + fileName);
+            } catch (StringIndexOutOfBoundsException e) {
                 System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
             } catch (IndexOutOfBoundsException e) {
                 System.out.println("There was an error with text: " + fileName + " while matching the tokens");
             }
-            System.out.println("created tsv for: " + fileName);
         });
         mergeTSVFiles(path, outputPath, outputFileName);
     }
     public void parseAnnotationFilesInDirectory(String path, String outputPath, String outputFileName, List<String> allowedLabels) {
         List<String> fileNames = getFileNames(path);
-
         fileNames.stream().filter(fileName -> fileName.contains(".txt")
                 && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
             System.out.println("started creating tsv for: " + fileName);
+            if (fileName.equals("54c7baa9e4b0554ac3c895cd.txt")) {
+                System.out.println("");
+            }
+
             try {
                 createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path, allowedLabels);
+                System.out.println("created tsv for: " + fileName);
+
             } catch (StringIndexOutOfBoundsException e){
                 System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
             } catch (IndexOutOfBoundsException e) {
                 System.out.println("There was an error with text: " + fileName + " while matching the tokens");
             }
-            System.out.println("created tsv for: " + fileName);
         });
         mergeTSVFiles(path, outputPath, outputFileName);
     }
@@ -130,7 +135,7 @@ public class FileParser {
             }
         }
 
-        return cleanedLabels;       
+        return cleanedLabels;
     }
 
     /**
@@ -199,17 +204,6 @@ public class FileParser {
             return new ArrayList<>();
         }
         // split content into multiple words if needed
-        List<String> contentParts = Arrays.asList(content.split(" ")).stream()
-                .map(this::splitTokenByDash).flatMap(Collection::stream)
-                .collect(Collectors.toList());
-
-        List<String> contentPartsWithSameSingleQuote =
-                    contentParts.stream().map(part -> part.replace("’", "'"))
-                            .collect(Collectors.toList());
-
-        List<String> splittedCommata =
-                contentPartsWithSameSingleQuote.stream().map(this::splitTokenByComma)
-                .flatMap(Collection::stream).collect(Collectors.toList());
 
         // annotation Information contains [Label StartPosition EndPosition]
         String[] annotationInformation = annotationParts[1].split(" ");
@@ -217,17 +211,40 @@ public class FileParser {
         int startPosition = Integer.parseInt(annotationInformation[1]);
 
         content = content.replace("’","'");
-        // build annotation for each word
-        for (String annotatedWord : splittedCommata) {
+        List<String> splittedAnnotations = splitAnnotationsByDelimiters(content);
+        int begin = 0;
+
+        for (String annotatedWord : splittedAnnotations) {
             String ID = "T" + currentIDCounter;
-            int startPositionOfPart = startPosition + content.indexOf(annotatedWord);
+            int startPositionOfPart = startPosition + begin;
             int endPositionOfPart = startPositionOfPart + annotatedWord.length();
+            begin += endPositionOfPart;
+            content = content.substring(endPositionOfPart);
             AnnotationEntity entity = new AnnotationEntity(ID, annotatedWord, startPositionOfPart,
                     endPositionOfPart, label);
             entities.add(entity);
         }
 
         return entities;
+    }
+
+    private List<String> splitAnnotationsByDelimiters(String content) {
+        List<String> contentParts = Arrays.asList(content.split(" ")).stream()
+                .map(this::splitTokenByDash).flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        List<String> contentPartsWithSameSingleQuote =
+                contentParts.stream().map(part -> part.replace("’", "'"))
+                        .collect(Collectors.toList());
+
+        List<String> splittedCommata =
+                contentPartsWithSameSingleQuote.stream().map(this::splitTokenByComma)
+                        .flatMap(Collection::stream).collect(Collectors.toList());
+
+        List<String> splitByAmpersand = splittedCommata.stream().map(this::splitTokenByAmpersand)
+                .flatMap(Collection::stream).collect(Collectors.toList());
+
+        return splitByAmpersand;
     }
 
     /**
@@ -401,7 +418,7 @@ public class FileParser {
 
     List<String> splitTokenByDelimiterWithoutDeletion(String input, String delimiter) {
         if (input.contains(delimiter)) {
-            List<String> splittedString = new ArrayList<>(Arrays.asList(input.split("-")));
+            List<String> splittedString = new ArrayList<>(Arrays.asList(input.split(delimiter)));
 
             for (int i = 1; i < splittedString.size(); i += 2) {
                 // i has to be increased by two because elements are added
@@ -417,6 +434,13 @@ public class FileParser {
     }
     List<String> splitTokenByComma(String input) {
         return splitTokenByDelimiterWithoutDeletion(input, ",");
+    }
+
+    List<String> splitTokenByAmpersand(String input) {
+        if (input.equals("&")) {
+            System.out.println("");
+        }
+        return splitTokenByDelimiterWithoutDeletion(input, "&");
     }
 
     List<String> splitTokenByDash(String input) {
