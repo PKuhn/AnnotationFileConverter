@@ -1,68 +1,56 @@
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
+import edu.stanford.nlp.ie.crf.CRFClassifier;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
 import edu.stanford.nlp.process.PTBTokenizer;
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
 public class FileParser {
+
+    private int totalTexts = 0;
+    private static int totalAnnotations = 0;
+    private static int failures = 0;
+
+    private final String PARSING_OPTIONS = "normalizeParentheses=false, asciiQuotes=true, " +
+            "latexQuotes=false, ptb3Dashes=false, normalizeOtherBrackets=false, ";
 
     public static void main(String[] args) {
         String path = args[0];
         String outputPath = args[1];
         FileParser parser = new FileParser();
+        parser.trainModels();
         List<String> allowedLabels = new ArrayList<>();
         allowedLabels.add("COMP");
-        parser.parseAnnotationFilesInDirectory(path, outputPath, "merged",allowedLabels);
+        //parser.parseAnnotationFilesInDirectory(path, outputPath, "100Rand", allowedLabels);
     }
 
     /**
      * Scans directory for all txt files where an according .ann file is present and converts them in
      * a single TSV file named merged.tsv
      * @param path path of directory where txt and ann files should be searched
+     * @param outputPath
+     * @param outputFileName
+     * @param allowedLabels
      */
-    public void parseAnnotationFilesInDirectory(String path, String outputPath, String outputFileName) {
-        List<String> fileNames = getFileNames(path);
-
-        fileNames.stream().filter(fileName -> fileName.contains(".txt")
-                && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
-            System.out.println("started creating tsv for: " + fileName);
-
-            try {
-                createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path);
-                System.out.println("created tsv for: " + fileName);
-            } catch (StringIndexOutOfBoundsException e) {
-                System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
-            } catch (IndexOutOfBoundsException e) {
-                System.out.println("There was an error with text: " + fileName + " while matching the tokens");
-            }
-        });
-        mergeTSVFiles(path, outputPath, outputFileName);
-    }
     public void parseAnnotationFilesInDirectory(String path, String outputPath, String outputFileName, List<String> allowedLabels) {
         List<String> fileNames = getFileNames(path);
         fileNames.stream().filter(fileName -> fileName.contains(".txt")
                 && fileNames.contains(StringUtils.substringBefore(fileName, ".txt") + ".ann")).forEach(fileName -> {
             System.out.println("started creating tsv for: " + fileName);
-            if (fileName.equals("54c7baa9e4b0554ac3c895cd.txt")) {
-                System.out.println("");
-            }
 
             try {
                 createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path, allowedLabels);
                 System.out.println("created tsv for: " + fileName);
-
-            } catch (StringIndexOutOfBoundsException e){
+                totalTexts++;
+            } catch (StringIndexOutOfBoundsException e) {
                 System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
             } catch (IndexOutOfBoundsException e) {
                 System.out.println("There was an error with text: " + fileName + " while matching the tokens");
             }
+
         });
         mergeTSVFiles(path, outputPath, outputFileName);
     }
@@ -95,55 +83,36 @@ public class FileParser {
      * @param textName name of text wanted to convert to TSV format
      * @param path path to directory where .txt and .ann file are
      */
-    public void createTSVFile(String textName, String path) {
-        FileParser parser = new FileParser();
-        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName, path);
-        try {
-            List<String> tokens = parser.tokenizeText(textName, path);
-            String text = parser.readInText(textName, path);
-            tokens = preprocessTokens(tokens);
-            List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
-            List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
-            parser.writeAnnotationsToTSV(tokens, labels, textName, path);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+
+    /**
+     * Creates TSV File for a single text. Requires according .ann File to be present.
+     * @param textName name of text wanted to convert to TSV format
+     * @param path path to directory where .txt and .ann file are
+     * @param allowedLabels
+     */
     public void createTSVFile(String textName, String path, List<String> allowedLabels) {
         FileParser parser = new FileParser();
-        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName, path);
+        List<AnnotationEntity> entities = parser.readInAnnotationFile(textName, path, allowedLabels);
         try {
             List<String> tokens = parser.tokenizeText(textName, path);
             String text = parser.readInText(textName, path);
             tokens = preprocessTokens(tokens);
+
             List<Integer> startingPositions = parser.findStartingPositionsOfTokens(tokens, text);
+
             List<String> labels = parser.matchTokens(tokens, entities, startingPositions);
-            labels = replaceUnallowedLabels(labels, allowedLabels);
             parser.writeAnnotationsToTSV(tokens, labels, textName, path);
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    private List<String> replaceUnallowedLabels(List<String> labels, List<String> allowedLabels) {
-        List<String> cleanedLabels = new ArrayList<>();
-        for (String label : labels) {
-            if (allowedLabels.contains(label)) {
-                cleanedLabels.add(label);
-            } else {
-                cleanedLabels.add("O");
-            }
-        }
-
-        return cleanedLabels;
     }
 
     /**
-    * Scans directory to list all file names present. This is used to find all pairs of files where an
-    * .ann and .txt file is present 
-    * @param path path to directory which should be checked for filenames
-    * @return all file names as string containing the file ending as well  
-    */
+     * Scans directory to list all file names present. This is used to find all pairs of files where an
+     * .ann and .txt file is present
+     * @param path path to directory which should be checked for filenames
+     * @return all file names as string containing the file ending as well
+     */
     private List<String> getFileNames(String path) {
         File folder = new File(path);
         File[] files = folder.listFiles();
@@ -161,15 +130,18 @@ public class FileParser {
      * @param path path to directory where name.txt and name.ann are present in this directory
      * @return List of entities in own AnnotationEntity format
      */
-    private List<AnnotationEntity> readInAnnotationFile(String textName, String path) {
+    private List<AnnotationEntity> readInAnnotationFile(String textName, String path,
+                                                        List<String> allowedLabels) {
         String fileName = textName + ".ann";
 
         List<String> annotations = readFileToLines(fileName, path);
+        totalAnnotations+= annotations.size();
         List<AnnotationEntity> entities= new ArrayList<>();
-
+        int offset = 0;
         int id = 0;
         for (String annotation : annotations) {
-            List<AnnotationEntity> entitiesInLine =  parseAnnotationLine(annotation, id);
+            List<AnnotationEntity> entitiesInLine =  parseAnnotationLine(annotation, id,
+                    allowedLabels, offset);
             entities.addAll(entitiesInLine);
             id += entitiesInLine.size();
         }
@@ -193,60 +165,92 @@ public class FileParser {
      * @param currentIDCounter current annotation ID needed fro create new Annotation
      * @return List of Annotation Entities which then have only one word as content.
      */
-    private List<AnnotationEntity> parseAnnotationLine(String line, int currentIDCounter) {
-        List<AnnotationEntity> entities = new ArrayList<>();
+    private List<AnnotationEntity> parseAnnotationLine(String line, int currentIDCounter,
+                                                       List<String> allowedLabels, int offset) {
 
-        line = line.trim().replaceAll(" +", " ");
+        //line = line.trim().replaceAll(" +", " ");
         String[] annotationParts = line.split("\t");
 
         String content = annotationParts[2];
-        if (content.equals("'")) {
-            return new ArrayList<>();
-        }
-        // split content into multiple words if needed
 
         // annotation Information contains [Label StartPosition EndPosition]
         String[] annotationInformation = annotationParts[1].split(" ");
         String label = annotationInformation[0];
+        if (!allowedLabels.contains(label)) {
+            return new ArrayList<>();
+        }
+
         int startPosition = Integer.parseInt(annotationInformation[1]);
 
-        content = content.replace("’","'");
-        List<String> splittedAnnotations = splitAnnotationsByDelimiters(content);
-        int begin = 0;
+        List<String> tokenizedContent = tokenizeString(new StringReader(content));
 
-        for (String annotatedWord : splittedAnnotations) {
+        List<String> splitAnnotations = new ArrayList<>();
+        for (String token : tokenizedContent) {
+            splitAnnotations.addAll(splitAnnotationsByDelimiters(token));
+        }
+
+        List<AnnotationEntity> entities = new ArrayList<>();
+
+        int begin = startPosition + offset;
+        for (String annotatedWord : splitAnnotations) {
             String ID = "T" + currentIDCounter;
-            int startPositionOfPart = startPosition + begin;
-            int endPositionOfPart = startPositionOfPart + annotatedWord.length();
-            begin += endPositionOfPart;
-            content = content.substring(endPositionOfPart);
-            AnnotationEntity entity = new AnnotationEntity(ID, annotatedWord, startPositionOfPart,
-                    endPositionOfPart, label);
+
+            AnnotationEntity entity = new AnnotationEntity(ID, annotatedWord, begin,
+                    begin+annotatedWord.length(), label);
+
+            begin += annotatedWord.length() + 1;
             entities.add(entity);
         }
 
         return entities;
     }
 
+
     private List<String> splitAnnotationsByDelimiters(String content) {
         List<String> contentParts = Arrays.asList(content.split(" ")).stream()
                 .map(this::splitTokenByDash).flatMap(Collection::stream)
                 .collect(Collectors.toList());
 
-        List<String> contentPartsWithSameSingleQuote =
-                contentParts.stream().map(part -> part.replace("’", "'"))
-                        .collect(Collectors.toList());
 
         List<String> splittedCommata =
-                contentPartsWithSameSingleQuote.stream().map(this::splitTokenByComma)
+                contentParts.stream().map(this::splitTokenByComma)
                         .flatMap(Collection::stream).collect(Collectors.toList());
 
         List<String> splitByAmpersand = splittedCommata.stream().map(this::splitTokenByAmpersand)
                 .flatMap(Collection::stream).collect(Collectors.toList());
 
-        return splitByAmpersand;
+        List<String> splitByPoint = splitByAmpersand.stream().map(this::splitTokenByPoint)
+                .flatMap(Collection::stream).collect(Collectors.toList());
+
+        return splitByPoint;
     }
 
+    /**
+     * Takes a string as input and replaces all unicode quotes to the respective ascii
+     * representation
+     * @param input text in which quotes should be replaced
+     * @return text without unicode Quotes
+     */
+    private String applyAsciiTransformation(String input) {
+        String asciiString = input;
+        List<Integer> doubleQuotes =
+                new ArrayList<>(Arrays.asList(0x201c, 0x201d,0x201e, 0x201f, 0x275d, 0x275e,
+                        0x00AB, 0x00BB));
+        List<Integer> singleQuotes =
+                new ArrayList<>(Arrays.asList(0x2018,0x2019,0x201a,0x201b,0x275b,0x275c));
+
+        for (Integer doubleQuoteHexValue : doubleQuotes) {
+            String doubleQuote = String.valueOf(Character.toChars(doubleQuoteHexValue));
+            asciiString = asciiString.replaceAll(doubleQuote, "\"");
+        }
+
+        for (Integer singleQuoteHexValue : singleQuotes) {
+            String singleQuote = String.valueOf(Character.toChars(singleQuoteHexValue));
+            asciiString = asciiString.replaceAll(singleQuote, "\'");
+        }
+
+        return asciiString;
+    }
     /**
      * prints matched tokens and labels generated by matchTokens() to an TSV file which can be read by the Standford NER
      * @param tokens list of tokens which the Standford PTB Tokenizer produces for the text which should be parsed to TSV 
@@ -257,7 +261,7 @@ public class FileParser {
     private void writeAnnotationsToTSV(List<String> tokens, List<String> labels, String fileName, String path) {
         try {
             fileName += ".tsv";
-            tokens = postProcessTokens(tokens);
+            //tokens = postProcessTokens(tokens);
             PrintWriter writer = new PrintWriter(path + File.separator + fileName, "UTF-8");
             for (int i = 0; i < tokens.size(); i++) {
                 if (labels.size() <= i) {
@@ -284,8 +288,6 @@ public class FileParser {
         int textIndex= 0;
 
         List<Integer> startPositions = new ArrayList<Integer>();
-        text = text.replace("’","'");
-        text = text.replace("‘","'");
 
         while (tokenIndex < tokens.size()) {
 
@@ -294,20 +296,17 @@ public class FileParser {
 
             String nextTextToken = text.substring(textIndex, textIndex + tokenSize);
 
-           // System.out.println(" found " + nextTextToken + " expected " + nextToken);
+            //System.out.println(" found " + nextTextToken + " expected " + nextToken);
 
-            if (nextToken.equals("“") && nextTextToken.equals("\"")) {
-                ;
-            } else if (nextToken.equals("’s") && nextTextToken.equals("'s")) {
-                ;
-            } else if (!nextTextToken.equals(nextToken) && !nextToken.equals("''")) {
+            if (nextTextToken.equals(nextToken)) {
+                startPositions.add(textIndex);
+                textIndex += tokenSize;
+                tokenIndex++;
+            } else if (nextTextToken.startsWith(nextToken)) {
+                System.out.println("this case happens");
+            } else {
                 textIndex++;
-                continue;
             }
-            startPositions.add(textIndex);
-            //set textIndex after recoqnized token and go to next token
-            textIndex += tokenSize;
-            tokenIndex++;
         }
 
         assert (startPositions.size() == tokens.size());
@@ -321,14 +320,22 @@ public class FileParser {
      * @return text in given text file with lines separated by " "
      */
     private String readInText(String textName, String path) {
-        String fileName = textName + ".txt";
+        String fileDir = textName + ".txt";
         String text = "";
         try {
-            List<String> lines = Files.readAllLines(Paths.get(path + File.separator +fileName));
-            text = String.join(" ", lines);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(
+                            new FileInputStream(path + File.separator + fileDir), "UTF8"));
+            String line;
+            while ((line = in.readLine()) != null) {
+                text +=  line + " ";
+            }
+        } catch (UnsupportedEncodingException e) {
+            System.out.println("invalid encoding");;
         } catch (IOException e) {
             e.printStackTrace();
         }
+        text = applyAsciiTransformation(text);
         return text;
     }
 
@@ -341,55 +348,8 @@ public class FileParser {
     private List<String> preprocessTokens(List<String> tokens) {
         List<String> processedTokens = new ArrayList<>();
         for (String token : tokens) {
-            switch(token)  {
-                case ("''"): processedTokens.add("“"); break;
-                case ("``"): processedTokens.add("“");
-                    break;
-                case("’’"):  processedTokens.add("“");
-                    break;
-                case ("`"): processedTokens.add("'"); break;
-                case("-LRB-") : processedTokens.add("("); break;
-                case("-RRB-") : processedTokens.add(")"); break;
-                case("--"): processedTokens.add(" "); break;
-               // case("'s"): processedTokens.add("’s"); break;
-                default: processedTokens.add(token);
-            }
-        }
-
-        List<String> splittedTokens = processedTokens.stream().map(this::splitTokenByDash)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toList());
-
-        List<String> tokensJoinedSingleQuotes = new ArrayList<>();
-
-        for (String token : splittedTokens) {
-            if(token.equals("'s")) {
-                int lastIndex = tokensJoinedSingleQuotes.size()-1;
-                String oldToken = tokensJoinedSingleQuotes.get(lastIndex);
-                String newToken = oldToken + "'s";
-                tokensJoinedSingleQuotes.set(lastIndex, newToken);
-            } else {
-                tokensJoinedSingleQuotes.add(token);
-            }
-        }
-        List<String> tokensWithSameSingleQuotes = tokensJoinedSingleQuotes.stream().
-                map(token -> token.replace("’", "'")).collect(Collectors.toList());
-
-
-        return tokensWithSameSingleQuotes;
-    }
-
-    private List<String> postProcessTokens(List<String> tokens) {
-        List<String> processedTokens = new ArrayList<>();
-        for (String token : tokens) {
-            switch(token)  {
-                case ("“"): processedTokens.add("''"); break;
-                case ("`"): processedTokens.add("'"); break;
-                case("(") : processedTokens.add("-LRB-"); break;
-                case(")") : processedTokens.add("-RRB-"); break;
-                case("--"): processedTokens.add(" "); break;
-                default: processedTokens.add(token);
-            }
+            String asciiToken = applyAsciiTransformation(token);
+            processedTokens.addAll(splitAnnotationsByDelimiters(asciiToken));
         }
         return processedTokens;
     }
@@ -404,10 +364,18 @@ public class FileParser {
     private List<String> tokenizeText(String textName, String path) throws IOException {
         String fileName = textName + ".txt";
 
+        BufferedReader in = new BufferedReader(
+                new InputStreamReader(
+                        new FileInputStream(path+ File.separator +fileName), "UTF8"));
+
+        return tokenizeString(in);
+    }
+
+    private List<String> tokenizeString(Reader inputReader) {
         List<String> tokens = new ArrayList<>();
 
-        PTBTokenizer<CoreLabel> ptbt = new PTBTokenizer<>(new FileReader(path+ File.separator +fileName),
-                new CoreLabelTokenFactory(), "");
+        PTBTokenizer<CoreLabel> ptbt = new PTBTokenizer<>(inputReader,
+                new CoreLabelTokenFactory(), PARSING_OPTIONS);
         while (ptbt.hasNext()) {
             CoreLabel label = ptbt.next();
             tokens.add(label.value());
@@ -416,9 +384,19 @@ public class FileParser {
         return tokens;
     }
 
+
     List<String> splitTokenByDelimiterWithoutDeletion(String input, String delimiter) {
+        if (input.equals("Saurenz.BASF")){
+            System.out.printf("");
+            System.out.println(input.split(delimiter).length);
+        }
         if (input.contains(delimiter)) {
-            List<String> splittedString = new ArrayList<>(Arrays.asList(input.split(delimiter)));
+            List<String> splittedString = new ArrayList<>();
+            if (delimiter.equals(".")) {
+                splittedString = new ArrayList<>(Arrays.asList(input.split("\\.")));
+            } else {
+                splittedString = new ArrayList<>(Arrays.asList(input.split(delimiter)));
+            }
 
             for (int i = 1; i < splittedString.size(); i += 2) {
                 // i has to be increased by two because elements are added
@@ -437,10 +415,15 @@ public class FileParser {
     }
 
     List<String> splitTokenByAmpersand(String input) {
-        if (input.equals("&")) {
-            System.out.println("");
-        }
         return splitTokenByDelimiterWithoutDeletion(input, "&");
+    }
+
+    List<String> splitTokenByPoint(String input) {
+        return splitTokenByDelimiterWithoutDeletion(input, ".");
+    }
+
+    List<String> splitTokenByBackslash(String input) {
+        return splitTokenByDelimiterWithoutDeletion(input, "\\");
     }
 
     List<String> splitTokenByDash(String input) {
@@ -469,29 +452,47 @@ public class FileParser {
      * @return list of labels in TSV format
      */
     private List<String> matchTokens(List<String> tokens, List<AnnotationEntity> annotations, List<Integer> startPositions) {
-        assert(tokens.size() == startPositions.size());
 
         List<String> labels = new ArrayList<>();
+        int annotationIndex = 0;
+        int textIndex = 0;
         int tokenIndex = 0;
+        int matchedTokens = 0;
 
-        for (AnnotationEntity annotation : annotations) {
+        while (annotationIndex < annotations.size() && tokenIndex< tokens.size()) {
+            AnnotationEntity annotation = annotations.get(annotationIndex);
             String token = tokens.get(tokenIndex);
+            annotation= annotations.get(annotationIndex);
             int textPosition = startPositions.get(tokenIndex);
-            if (annotation.getContent().contains(",")) {
-                continue;
+
+            if (token.equals(annotation.getContent())) {
+                labels.add(annotation.getLabel());
+                annotationIndex++;
+                System.out.println("matched: " + annotation.getContent());
+                matchedTokens++;
+            } else if (token.contains(annotation.getContent()) && Math.abs(annotation.getStart()
+                    -textIndex) < 10) {
+                System.out.println("debug this case");
             }
-            while (!(token.contains(annotation.getContent()) && textPosition == annotation.getStart())) {
-                tokenIndex++;
+            else {
                 labels.add("O");
-                textPosition = startPositions.get(tokenIndex);
-                token = tokens.get(tokenIndex);
             }
 
-            labels.add(annotation.getLabel());
+            if (textPosition > annotation.getStart() + 10) {
+                annotationIndex++;
+            }
             tokenIndex++;
         }
+
+        while(tokenIndex< tokens.size()) {
+            labels.add("O");
+            tokenIndex++;
+        }
+        //failures += annotations.size() - matchedTokens;
+        //System.out.println("matched " + matchedTokens + " from a total of: " + annotations.size());
         return labels;
     }
+
 
     /**
      * helper method needed to convert a file to a list of string, where each string represents one line in the file    
@@ -517,7 +518,36 @@ public class FileParser {
         return lines;
     }
 
+    private void trainModels() {
+        //trainModel("D:\\Job\\AnnotationFileParser\\data\\100Comp.prop", "100comp.ser");
+        //trainModel("D:\\Job\\AnnotationFileParser\\data\\200Comp.prop", "200comp.ser");
+        trainModel("D:\\Job\\AnnotationFileParser\\data\\Rand.prop", "100rand.ser");
+    }
 
+    private void trainModel(String propPath, String outputName) {
+        Properties properties = new Properties();
+        BufferedInputStream stream = null;
+        try {
+            stream = new BufferedInputStream(new FileInputStream
+                    (propPath));
+            properties.load(stream);
+            stream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        CRFClassifier cr = new CRFClassifier(properties);
+        cr.train();
+        cr.serializeClassifier("D:\\Job\\AnnotationFileParser\\data\\" + outputName);
+        CRFClassifier test = new CRFClassifier(properties);
+        try {
+            test.loadClassifier("D:\\Job\\AnnotationFileParser\\data\\" + outputName);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
+    }
     /**
      * method needed to read in annotation configurations which can be used to verify if all the labels present in the current
      * annotation file are defined and valid. For now it is enough to just read all entities from the configuration file.
