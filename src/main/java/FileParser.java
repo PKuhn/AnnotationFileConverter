@@ -9,17 +9,61 @@ import java.util.stream.Stream;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
 import edu.stanford.nlp.process.PTBTokenizer;
+import org.apache.commons.cli.*;
 import org.apache.commons.lang3.StringUtils;
 
 public class FileParser {
 
     public static void main(String[] args) {
-        String path = args[0];
-        String outputPath = args[1];
-        FileParser parser = new FileParser();
-        List<String> allowedLabels = new ArrayList<>();
-        allowedLabels.add("COMP");
-        parser.parseAnnotationFilesInDirectory(path, outputPath, "merged",allowedLabels);
+
+        // Use Apache Commons CLI to handle command line input.
+        CommandLineParser cmdParser = new DefaultParser();
+
+        // Create CommonsCLI Input Options
+        Options options = new Options();
+
+        Option inputDirectory = Option.builder("i")
+                .required(true)
+                .longOpt("input")
+                .hasArg()
+                .argName("directory")
+                .desc("directory that conatins *.txt and *.ann files")
+                .build();
+
+        Option outputDirectory = Option.builder("o")
+                .required(true)
+                .longOpt("output")
+                .hasArg()
+                .argName("directory")
+                .desc("directory where to output the merged *.tsv file")
+                .build();
+
+        options.addOption(inputDirectory);
+        options.addOption(outputDirectory);
+
+        try {
+            // parse the command line arguments
+            CommandLine line = cmdParser.parse( options, args );
+
+            if(line.hasOption("i") && line.hasOption("o")){
+
+                FileParser parser = new FileParser();
+                List<String> allowedLabels = new ArrayList<>();
+                allowedLabels.add("COMP");
+                parser.parseAnnotationFilesInDirectory(line.getOptionValue("i"), line.getOptionValue("o"), "merged",allowedLabels);
+            }else{
+                HelpFormatter formatter = new HelpFormatter();
+                formatter.printHelp("FileParser", options);
+            }
+        }
+        catch( ParseException exp ) {
+            //print help text
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("FileParser", options);
+
+            // oops, something went wrong => print Reason
+            System.err.println( "Parsing failed.  Reason: " + exp.getMessage() );
+        }
     }
 
     /**
