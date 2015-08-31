@@ -21,10 +21,10 @@ public class FileParser {
         String path = args[0];
         String outputPath = args[1];
         FileParser parser = new FileParser();
-        parser.trainModels();
+        //parser.trainModels();
         List<String> allowedLabels = new ArrayList<>();
         allowedLabels.add("COMP");
-        //parser.parseAnnotationFilesInDirectory(path, outputPath, "100Rand", allowedLabels);
+        parser.parseAnnotationFilesInDirectory(path, outputPath, "100Rand", allowedLabels);
     }
 
     /**
@@ -521,7 +521,7 @@ public class FileParser {
     private void trainModels() {
         //trainModel("D:\\Job\\AnnotationFileParser\\data\\100Comp.prop", "100comp.ser");
         //trainModel("D:\\Job\\AnnotationFileParser\\data\\200Comp.prop", "200comp.ser");
-        trainModel("D:\\Job\\AnnotationFileParser\\data\\Rand.prop", "100rand.ser");
+        //trainModel("D:\\Job\\AnnotationFileParser\\data\\Rand.prop", "100rand.ser");
     }
 
     private void trainModel(String propPath, String outputName) {
