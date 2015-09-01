@@ -11,12 +11,9 @@ import java.util.stream.Collectors;
 
 public class FileParser {
 
-    private int totalTexts = 0;
-    private static int totalAnnotations = 0;
-    private static int failures = 0;
-
     private final String PARSING_OPTIONS = "normalizeParentheses=false, asciiQuotes=true, " +
-            "latexQuotes=false, ptb3Dashes=false, normalizeOtherBrackets=false, ";
+            "latexQuotes=false, ptb3Dashes=false, normalizeOtherBrackets=false, ptb3Ellipsis=false, unicodeEllipsis=false," +
+            "normalizeFractions = false";
 
     public static void main(String[] args) {
         // Use Apache Commons CLI to handle command line input.
@@ -86,7 +83,6 @@ public class FileParser {
             try {
                 createTSVFile(StringUtils.substringBefore(fileName, ".txt"), path, allowedLabels);
                 System.out.println("created tsv for: " + fileName);
-                totalTexts++;
             } catch (StringIndexOutOfBoundsException e) {
                 System.out.println("There was an error with text: " + fileName + " while searching the start positions of the tokens");
             } catch (IndexOutOfBoundsException e) {
@@ -177,7 +173,6 @@ public class FileParser {
         String fileName = textName + ".ann";
 
         List<String> annotations = readFileToLines(fileName, path);
-        totalAnnotations+= annotations.size();
         List<AnnotationEntity> entities= new ArrayList<>();
         int offset = 0;
         int id = 0;
@@ -290,6 +285,12 @@ public class FileParser {
             String singleQuote = String.valueOf(Character.toChars(singleQuoteHexValue));
             asciiString = asciiString.replaceAll(singleQuote, "\'");
         }
+        String nonBreakingSpace =String.valueOf(Character.toChars(0x00A0));
+        asciiString = asciiString.replaceAll(nonBreakingSpace, " ");
+
+        String tripleDots =String.valueOf(Character.toChars(0x2026));
+        asciiString = asciiString.replaceAll(tripleDots, "...");
+
 
         return asciiString;
     }
@@ -329,7 +330,7 @@ public class FileParser {
         int tokenIndex = 0;
         int textIndex= 0;
 
-        List<Integer> startPositions = new ArrayList<Integer>();
+        List<Integer> startPositions = new ArrayList<>();
 
         while (tokenIndex < tokens.size()) {
 
@@ -337,15 +338,10 @@ public class FileParser {
             int tokenSize = nextToken.length();
 
             String nextTextToken = text.substring(textIndex, textIndex + tokenSize);
-
-            //System.out.println(" found " + nextTextToken + " expected " + nextToken);
-
             if (nextTextToken.equals(nextToken)) {
                 startPositions.add(textIndex);
                 textIndex += tokenSize;
                 tokenIndex++;
-            } else if (nextTextToken.startsWith(nextToken)) {
-                System.out.println("this case happens");
             } else {
                 textIndex++;
             }
@@ -510,7 +506,7 @@ public class FileParser {
             if (token.equals(annotation.getContent())) {
                 labels.add(annotation.getLabel());
                 annotationIndex++;
-                System.out.println("matched: " + annotation.getContent());
+                //System.out.println("matched: " + annotation.getContent());
                 matchedTokens++;
             } else if (token.contains(annotation.getContent()) && Math.abs(annotation.getStart()
                     -textIndex) < 10) {
