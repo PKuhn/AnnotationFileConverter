@@ -13,7 +13,7 @@ public class FileParser {
 
     private final String PARSING_OPTIONS = "normalizeParentheses=false, asciiQuotes=true, " +
             "latexQuotes=false, ptb3Dashes=false, normalizeOtherBrackets=false, ptb3Ellipsis=false, unicodeEllipsis=false," +
-            "normalizeFractions = false";
+            "normalizeFractions = false, normalizeCurrency = false";
 
     public static void main(String[] args) {
         // Use Apache Commons CLI to handle command line input.
@@ -293,9 +293,6 @@ public class FileParser {
 
         String softHyphen =String.valueOf(Character.toChars(0x00AD));
         asciiString = asciiString.replaceAll(softHyphen, "");
-
-        String euroSign = String.valueOf(Character.toChars(0x20AC));
-        asciiString = asciiString.replaceAll(euroSign, "\\$");
 
         return asciiString;
     }
