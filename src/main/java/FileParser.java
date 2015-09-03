@@ -274,7 +274,7 @@ public class FileParser {
                 new ArrayList<>(Arrays.asList(0x201c, 0x201d,0x201e, 0x201f, 0x275d, 0x275e,
                         0x00AB, 0x00BB));
         List<Integer> singleQuotes =
-                new ArrayList<>(Arrays.asList(0x2018,0x2019,0x201a,0x201b,0x275b,0x275c));
+                new ArrayList<>(Arrays.asList(0x2018,0x2019,0x201a,0x201b,0x275b,0x275c,0x0091));
 
         for (Integer doubleQuoteHexValue : doubleQuotes) {
             String doubleQuote = String.valueOf(Character.toChars(doubleQuoteHexValue));
@@ -291,6 +291,11 @@ public class FileParser {
         String tripleDots =String.valueOf(Character.toChars(0x2026));
         asciiString = asciiString.replaceAll(tripleDots, "...");
 
+        String softHyphen =String.valueOf(Character.toChars(0x00AD));
+        asciiString = asciiString.replaceAll(softHyphen, "");
+
+        String euroSign = String.valueOf(Character.toChars(0x20AC));
+        asciiString = asciiString.replaceAll(euroSign, "\\$");
 
         return asciiString;
     }
@@ -338,6 +343,10 @@ public class FileParser {
             int tokenSize = nextToken.length();
 
             String nextTextToken = text.substring(textIndex, textIndex + tokenSize);
+            //System.out.println(" found " + nextTextToken + " expected " + nextToken);
+            if (nextToken.contains("$")) {
+                System.out.println("'");
+            }
             if (nextTextToken.equals(nextToken)) {
                 startPositions.add(textIndex);
                 textIndex += tokenSize;
@@ -510,6 +519,10 @@ public class FileParser {
                 matchedTokens++;
             } else if (token.contains(annotation.getContent()) && Math.abs(annotation.getStart()
                     -textIndex) < 10) {
+                labels.add(annotation.getLabel());
+                annotationIndex++;
+                //System.out.println("matched: " + annotation.getContent());
+                matchedTokens++;
                 System.out.println("debug this case");
             }
             else {
